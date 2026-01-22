@@ -1,0 +1,194 @@
+/**
+ * Prisma Schema - Project Management API
+ *
+ * Defines the complete data model for users, projects, and tasks.
+ *
+ * Key Features:
+ * - Role-based authentication and authorization
+ * - Project memberships with specific roles
+ * - Task assignment and tracking
+ * - Soft delete on main entities
+ * - UUID-based IDs for security
+ *
+ * ⚠️ All migrations must be reviewed before production deployment.
+ */
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ========================================
+// ENUMS
+// ========================================
+
+/**
+ * Global user role in the system.
+ */
+enum Role {
+  USER
+  ADMIN
+}
+
+/**
+ * User role within a specific project.
+ */
+enum ProjectRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+/**
+ * Task lifecycle status.
+ */
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+  CANCELLED
+}
+
+/**
+ * Task priority level.
+ */
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// ========================================
+// MODELS
+// ========================================
+
+/**
+ * User
+ *
+ * Represents a system user with authentication and authorization.
+ *
+ * Key Design Decisions:
+ * - UUID as ID to prevent enumeration attacks
+ * - Email as unique authentication identifier
+ * - Soft delete via isActive flag
+ */
+model User {
+  id       String  @id @default(uuid())
+  email    String  @unique
+  name     String
+  password String
+  role     Role    @default(USER)
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  createdProjects    Project[]
+  projectMemberships ProjectMember[]
+  assignedTasks      Task[]
+  createdTasks       Task[]          @relation("TaskCreator")
+
+  @@index([email])
+  @@index([isActive])
+  @@map("users")
+}
+
+/**
+ * Project
+ *
+ * Groups related tasks and manages team members.
+ *
+ * Key Design Decisions:
+ * - Cascade delete on owner removes project
+ * - Soft delete to preserve history
+ */
+model Project {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  ownerId     String
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  owner   User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  members ProjectMember[]
+  tasks   Task[]
+
+  @@index([ownerId])
+  @@index([isActive])
+  @@index([createdAt])
+  @@map("projects")
+}
+
+/**
+ * ProjectMember
+ *
+ * Junction table for User-Project many-to-many relationship.
+ * Defines user roles within specific projects.
+ */
+model ProjectMember {
+  id        String      @id @default(uuid())
+  userId    String
+  projectId String
+  role      ProjectRole @default(MEMBER)
+  joinedAt  DateTime    @default(now())
+
+  // Relations
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@index([userId])
+  @@index([projectId])
+  @@map("project_members")
+}
+
+/**
+ * Task
+ *
+ * Represents a unit of work within a project.
+ *
+ * Key Design Decisions:
+ * - assigneeId is nullable (tasks can be unassigned)
+ * - Cascade delete when project is deleted
+ * - SET NULL when assignee/creator is deleted
+ */
+model Task {
+  id          String       @id @default(uuid())
+  title       String
+  description String?
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  projectId   String
+  assigneeId  String?
+  createdById String?
+  dueDate     DateTime?
+  isActive    Boolean      @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee  User?   @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy User?   @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([assigneeId])
+  @@index([createdById])
+  @@index([status])
+  @@index([priority])
+  @@index([dueDate])
+  @@index([isActive])
+  @@map("tasks")
+}
