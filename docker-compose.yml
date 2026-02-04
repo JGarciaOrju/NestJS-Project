@@ -1,0 +1,58 @@
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: project-manager-db
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-project_manager}
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (for future use: caching, sessions)
+  redis:
+    image: redis:7-alpine
+    container_name: project-manager-redis
+    ports:
+      - '6379:6379'
+    networks:
+      - app-network
+
+  # NestJS API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: project-manager-api
+    environment:
+      DATABASE_URL: 'postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-project_manager}?schema=public'
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3001}
+      NODE_ENV: production
+    ports:
+      - '3000:3000'
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+
+# Volumes
+volumes:
+  postgres_data:
+
+# Networks
+networks:
+  app-network:
+    driver: bridge

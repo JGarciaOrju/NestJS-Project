@@ -1,11 +1,32 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Security headers with Helmet
+  app.use(
+    helmet({
+      contentSecurityPolicy:
+        process.env.NODE_ENV === 'production' ? undefined : false,
+    }),
+  );
+
+  // CORS configuration
+  app.enableCors({
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || [
+      'http://localhost:3001',
+      'http://localhost:5173',
+      'http://localhost:4200',
+    ],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT'],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
 
   // Global validation pipe
   app.useGlobalPipes(
@@ -51,8 +72,8 @@ async function bootstrap() {
     },
   });
 
-  await app.listen(3000);
-  console.log(`Application is running on: http://localhost:3000`);
-  console.log(`Swagger documentation: http://localhost:3000/api/docs`);
+  await app.listen(3001);
+  console.log(`Application is running on: http://localhost:3001`);
+  console.log(`Swagger documentation: http://localhost:3001/api/docs`);
 }
 bootstrap();

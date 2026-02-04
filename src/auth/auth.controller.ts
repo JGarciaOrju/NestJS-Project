@@ -20,6 +20,7 @@ import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -27,6 +28,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 registros por minuto
   @ApiOperation({ summary: 'Register a new user' })
   @ApiBody({ type: RegisterDto })
   @ApiResponse({
@@ -41,6 +43,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 logins por minuto
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiBody({ type: LoginDto })
@@ -55,6 +58,7 @@ export class AuthController {
   }
 
   @Get('profile')
+  @SkipThrottle() // Excluir de rate limiting
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get current user profile' })

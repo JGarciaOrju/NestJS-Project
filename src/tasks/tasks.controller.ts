@@ -23,6 +23,9 @@ import { AssignTaskDto } from './dto/assign-task.dto';
 import { TaskResponseDto } from './dto/task-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Query } from '@nestjs/common';
+import { FilterTasksDto } from './dto/filter-tasks.dto';
+import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 
 @ApiTags('tasks')
 @Controller('tasks')
@@ -48,15 +51,41 @@ export class TasksController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all tasks assigned to or created by user' })
+  @ApiOperation({
+    summary: 'Get all tasks with filters and pagination',
+    description:
+      'Get tasks assigned to or created by user with optional filters',
+  })
   @ApiResponse({
     status: 200,
-    description: 'List of tasks',
-    type: [TaskResponseDto],
+    description: 'Paginated list of tasks',
+    schema: {
+      example: {
+        data: [
+          {
+            id: 'uuid',
+            title: 'Task title',
+            status: 'TODO',
+            priority: 'HIGH',
+          },
+        ],
+        meta: {
+          page: 1,
+          limit: 10,
+          total: 50,
+          totalPages: 5,
+          hasNext: true,
+          hasPrev: false,
+        },
+      },
+    },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  findAll(@CurrentUser() user: any): Promise<TaskResponseDto[]> {
-    return this.tasksService.findAll(user.id);
+  findAll(
+    @CurrentUser() user: any,
+    @Query() filters: FilterTasksDto,
+  ): Promise<PaginatedResponseDto<TaskResponseDto>> {
+    return this.tasksService.findAllWithFilters(user.id, filters);
   }
 
   @Get('project/:projectId')

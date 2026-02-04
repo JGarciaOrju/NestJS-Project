@@ -12,6 +12,8 @@ import { AddMemberDto } from './dto/add-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { ProjectResponseDto } from './dto/project-response.dto';
 import { ProjectRole } from '@prisma/client';
+import { FilterProjectsDto } from './dto/filter-projects.dto';
+import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 
 /**
  * ProjectsService
@@ -461,5 +463,76 @@ export class ProjectsService {
     });
 
     return this.findOne(projectId, requesterId);
+  }
+
+  /**
+   * Get all projects with filters and pagination.
+   */
+  async findAllWithFilters(
+    userId: string,
+    filters: FilterProjectsDto,
+  ): Promise<PaginatedResponseDto<ProjectResponseDto>> {
+    const { page = 1, limit = 10, search } = filters;
+
+    const skip = (page - 1) * limit;
+
+    // Build where clause
+    const where: any = {
+      isActive: true,
+      members: {
+        some: {
+          userId: userId,
+        },
+      },
+    };
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    // Get total count
+    const total = await this.prisma.project.count({ where });
+
+    // Get paginated projects
+    const projects = await this.prisma.project.findMany({
+      where,
+      include: {
+        owner: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        _count: {
+          select: {
+            tasks: true,
+            members: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      skip,
+      take: limit,
+    });
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data: projects,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    };
   }
 }

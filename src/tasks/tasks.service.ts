@@ -11,7 +11,8 @@ import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { TaskResponseDto } from './dto/task-response.dto';
 import { TaskStatus, TaskPriority, ProjectRole } from '@prisma/client';
-
+import { FilterTasksDto } from './dto/filter-tasks.dto';
+import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 /**
  * TasksService
  *
@@ -20,7 +21,95 @@ import { TaskStatus, TaskPriority, ProjectRole } from '@prisma/client';
 @Injectable()
 export class TasksService {
   constructor(private readonly prisma: PrismaService) {}
+  /**
+   * Get all tasks with filters and pagination.
+   */
+  async findAllWithFilters(
+    userId: string,
+    filters: FilterTasksDto,
+  ): Promise<PaginatedResponseDto<TaskResponseDto>> {
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      priority,
+      assigneeId,
+      projectId,
+    } = filters;
 
+    const skip = (page - 1) * limit;
+
+    // Build where clause
+    const where: any = {
+      isActive: true,
+      OR: [{ assigneeId: userId }, { createdById: userId }],
+    };
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (priority) {
+      where.priority = priority;
+    }
+
+    if (assigneeId) {
+      where.assigneeId = assigneeId;
+    }
+
+    if (projectId) {
+      where.projectId = projectId;
+    }
+
+    // Get total count
+    const total = await this.prisma.task.count({ where });
+
+    // Get paginated tasks
+    const tasks = await this.prisma.task.findMany({
+      where,
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      skip,
+      take: limit,
+    });
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data: tasks,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    };
+  }
   /**
    * Create a new task in a project.
    * Only project members can create tasks.

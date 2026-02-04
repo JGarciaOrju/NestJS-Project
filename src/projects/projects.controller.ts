@@ -23,6 +23,9 @@ import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { ProjectResponseDto } from './dto/project-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Query } from '@nestjs/common';
+import { FilterProjectsDto } from './dto/filter-projects.dto';
+import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 
 @ApiTags('projects')
 @Controller('projects')
@@ -47,15 +50,20 @@ export class ProjectsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all projects where user is a member' })
+  @ApiOperation({
+    summary: 'Get all projects with filters and pagination',
+    description: 'Get projects where user is a member with optional search',
+  })
   @ApiResponse({
     status: 200,
-    description: 'List of projects',
-    type: [ProjectResponseDto],
+    description: 'Paginated list of projects',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  findAll(@CurrentUser() user: any): Promise<ProjectResponseDto[]> {
-    return this.projectsService.findAll(user.id);
+  findAll(
+    @CurrentUser() user: any,
+    @Query() filters: FilterProjectsDto,
+  ): Promise<PaginatedResponseDto<ProjectResponseDto>> {
+    return this.projectsService.findAllWithFilters(user.id, filters);
   }
 
   @Get(':id')
